@@ -13,14 +13,17 @@ const port = 3000;
 const db = new sqlite3.Database("database.db");
 
 async function fetchData() {
+  console.log('fetching...');
   const url =
     "https://api.blockchain.info/charts/market-price?format=csv&timespan=all";
-  const response = await fetch(url);
+  const response =  await fetch(url);
   writeToDB(response.body);
+
 }
 
 const writeToDB = (response) => {
   const results = [];
+
   response
     .pipe(csv())
     .on("data", (data) => results.push(data))
@@ -48,14 +51,18 @@ const writeToDB = (response) => {
 };
 
 io.on("connection", (socket) => {
+  fetchData();
   console.log("Connected.");
+  
   socket.on("getData", () => {
+
     db.all("SELECT * FROM tableValues", (err, rows) => {
       if (err) {
         return console.error(err);
       }
       socket.emit("data", rows);
     });
+    console.log('updating...')
   });
   socket.on("disconnect", () => {
     console.log("Disconnected.");
