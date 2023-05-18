@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "chart.js": "^4.3.0",
+    "csv-parser": "^3.0.0",
+    "express": "^4.18.2",
+    "fs": "*",
+    "socket.io": "^4.6.1",
+    "socket.io-client": "^4.6.1",
+    "sqlite3": "^5.1.6"
+  }
+}
