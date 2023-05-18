@@ -34,7 +34,7 @@
 
   <script>
     const socket = io();
-    socket.emit('getData');
+
     const chartElement = document.getElementById('chart');
     const chart = new Chart(chartElement, {
       type: 'line',
@@ -70,56 +70,31 @@
       },
     });
     socket.on('data', (data) => {
-    
       getChart();
     });
+    socket.on('dataUpdate', (data) => {
+      getChart(data);
+      
+    });
+    socket.on('filterData', (data, unit) => {
+      chart.options.scales.x.time.unit = unit;
+      getChart(data);
 
-    function getChart(param) {
-      fetch(`/db?param=${param}`).then(response => response.json())
-        .then(data => {
-          const years = data.map(item => item['year']);
-          const prices = data.map(item => item['price']);
-
-          chart.data.labels = years;
-          chart.data.datasets[0].data = prices;
-          chart.update();
-
-        })
-        .catch(error => {
-          console.error('Error:', error);
-        });
+    });
+    function getChart(data) { 
+        const years = data.map(item => item['year']);
+        const prices = data.map(item => item['price']);
+        chart.data.labels = years;
+        chart.data.datasets[0].data = prices;
+        chart.update();
     }
-
     function filterChart(range = 0) {
-      let currentDate = new Date().getTime();
-      let rangeDate = '';
-      let unit = 'year';
-      rangeDate = range ? currentDate - (range * 24 * 60 * 60 * 1000) : 0;
-
-      if (range <= 30 && range != 0) {
-        unit = 'day';
-      } else if (range <= 730 && range != 0) {
-        unit = 'month';
-      } else {
-        unit = 'year';
-      }
-
-      fetch(`/db?param1=${currentDate}&param2=${rangeDate}`).then(response => response.json())
-        .then(data => {
-          const years = data.map(item => item['year']);
-          const prices = data.map(item => item['price']);
-
-
-          chart.options.scales.x.time.unit = unit;
-          chart.data.labels = years;
-          chart.data.datasets[0].data = prices;
-          chart.update();
-
-        })
-        .catch(error => {
-          console.error('Error:', error);
-        });
+      
+      socket.emit('filter_req', range);
     }
+  
+
+   
   </script>
 </body>
 

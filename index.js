@@ -12,18 +12,40 @@ const port = 3000;
 
 const db = new sqlite3.Database("database.db");
 
-async function fetchData() {
-  console.log('fetching...');
+function fetchData() {
   const url =
     "https://api.blockchain.info/charts/market-price?format=csv&timespan=all";
-  const response =  await fetch(url);
-  writeToDB(response.body);
-
+    return fetch(url)
+    .then(response => {
+      writeToDB(response.body);
+    })
+    .catch(error => {
+      console.error("Error:", error);
+    });
 }
 
+const getDataFromDatabase = () => {
+  return new Promise((resolve, reject) => {
+    db.all("SELECT * FROM tableValues", (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+};
+
+const sendUpdatedDataToClient = async () => {
+  try {
+    const data = await getDataFromDatabase();
+    io.emit("dataUpdate", data);
+  } catch (error) {
+    console.error("Error:", error);
+  }
+};
 const writeToDB = (response) => {
   const results = [];
-
   response
     .pipe(csv())
     .on("data", (data) => results.push(data))
@@ -51,63 +73,56 @@ const writeToDB = (response) => {
 };
 
 io.on("connection", (socket) => {
-  fetchData();
   console.log("Connected.");
-  
-  socket.on("getData", () => {
 
-    db.all("SELECT * FROM tableValues", (err, rows) => {
-      if (err) {
-        return console.error(err);
-      }
-      socket.emit("data", rows);
-    });
-    console.log('updating...')
+  sendUpdatedDataToClient();
+
+  socket.on('filter_req', (range) => {
+    filterData(range);
   });
+
   socket.on("disconnect", () => {
     console.log("Disconnected.");
   });
-});
-app.get("/db", (req, res) => {
-  const param = req.query.param;
-  if (param) {
-    db.all("SELECT * FROM tableValues", (err, rows) => {
-      if (err) {
-        console.error("Error retrieving data from database:", err);
-        res.status(500).send("Internal Server Error");
-        return;
-      }
 
-      res.json(rows);
-    });
-  } else {
-    const param1 = req.query.param1;
-    const param2 = req.query.param2;
-    db.all(
-      "SELECT * FROM tableValues WHERE year >= ? AND year <= ?",
-      [param2, param1],
-      (err, rows) => {
-        if (err) {
-          console.error("Error retrieving data from database:", err);
-          res.status(500).send("Internal Server Error");
-          return;
-        }
-
-        res.json(rows);
-      }
-    );
-  }
 });
+
+
+
+function filterData(range = 0){
+      let currentDate = new Date().getTime();
+      let rangeDate = '';
+      let unit = 'year';
+      if (range <= 30 && range != 0) {
+        unit = 'day';
+      } else if (range <= 730 && range != 0) {
+        unit = 'month';
+      } else {
+        unit = 'year';
+      }
+      rangeDate = range ? currentDate - (range * 24 * 60 * 60 * 1000) : 0;
+
+        db.all(
+                "SELECT * FROM tableValues WHERE year >= ? AND year <= ?",
+                [rangeDate, currentDate],
+                (err, rows) => {
+                  if (err) {
+                    console.error("Error:", err);
+                    return;
+                  }
+    
+                  io.emit('filterData', rows, unit);
+    
+                }
+        );
+}
+
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
 });
+server.listen(port, () => {
+    fetchData();
+    console.log(`http://localhost:${port}`);
+});
 
-fetchData()
-  .then(() => {
-    server.listen(port, () => {
-      console.log(`http://localhost:${port}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Error:", error);
-  });
+
