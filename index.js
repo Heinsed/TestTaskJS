@@ -12,12 +12,17 @@ const port = 3000;
 
 const db = new sqlite3.Database("database.db");
 
-function fetchData() {
+function fetchData(status) {
   const url =
     "https://api.blockchain.info/charts/market-price?format=csv&timespan=all";
     return fetch(url)
     .then(response => {
-      writeToDB(response.body);
+      if(status === 'init'){
+        writeToDB(response.body);
+      }else if(status === 'updating'){
+        updateDB(response.body);
+      }
+  
     })
     .catch(error => {
       console.error("Error:", error);
@@ -54,17 +59,30 @@ const writeToDB = (response) => {
         db.run(
           "CREATE TABLE IF NOT EXISTS tableValues (id INTEGER PRIMARY KEY, year INTEGER, price REAL)"
         );
-        const stmt = db.prepare(
+
+      
+     
+        const stmt =  db.prepare(
           "INSERT OR REPLACE INTO tableValues VALUES (?, ?, ?)"
         );
+          
         results.forEach((data, id) => {
-          data.id = id + 1;
+  
           const year = new Date(Object.values(data)[0]);
-
+         
+        
+         
           const price = Object.values(data)[1];
+
+ 
           if (!isNaN(year) && !isNaN(price)) {
-            stmt.run(data.id, year, price);
+       
+             stmt.run(id, year, price);
+            
+           
           }
+         
+          
         });
 
         stmt.finalize();
@@ -72,10 +90,46 @@ const writeToDB = (response) => {
     });
 };
 
+
+const updateDB = (response) => {
+  const results = [];
+  response
+    .pipe(csv())
+    .on("data", (data) => results.push(data))
+    .on("end", () => {
+      db.all("SELECT * FROM tableValues ORDER BY id DESC LIMIT 1", (err, rows) => {
+        if (err) {
+          console.error("Error:", err);
+          return;
+        }
+        const lastRow = Object.values(rows[0])[0];
+        const stmt =  db.prepare(
+          "INSERT INTO tableValues VALUES (?, ?, ?)"
+        );
+          
+        results.forEach((data, id) => {
+          const year = new Date(Object.values(data)[0]);
+          const price = Object.values(data)[1];
+  
+  
+          if (!isNaN(year) && !isNaN(price)) {
+            if(lastRow < id){
+              stmt.run(id, year, price);  
+              console.log("Updated");
+            }
+          } 
+        });
+      });
+    
+   
+    });
+};
+
 io.on("connection", (socket) => {
   console.log("Connected.");
 
   sendUpdatedDataToClient();
+  setInterval(sendUpdatedDataToClient, 5000);
 
   socket.on('filter_req', (range) => {
     filterData(range);
@@ -121,7 +175,8 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
 });
 server.listen(port, () => {
-    fetchData();
+    fetchData('init');
+    setInterval(function(){fetchData('updating')} , 5000);
     console.log(`http://localhost:${port}`);
 });
 
