@@ -129,7 +129,7 @@ io.on("connection", (socket) => {
   console.log("Connected.");
 
   sendUpdatedDataToClient();
-  setInterval(sendUpdatedDataToClient, 5000);
+  // setInterval(sendUpdatedDataToClient, 5000);
 
   socket.on('filter_req', (range) => {
     filterData(range);
